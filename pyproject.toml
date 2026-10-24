@@ -1,0 +1,22 @@
+[build-system]
+requires = ["setuptools>=68", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "wav2score-render"
+version = "0.1.0"
+description = "Orchestrate song2score transcription and FluidSynth MIDI rendering"
+readme = "README.md"
+requires-python = ">=3.10"
+license = { text = "MIT" }
+authors = [{ name = "wav2score-render contributors" }]
+dependencies = []
+
+[project.optional-dependencies]
+dev = ["coverage>=7.4"]
+
+[project.scripts]
+wav2score-render = "wav2score_render.cli:main"
+
+[tool.setuptools.packages.find]
+include = ["wav2score_render*"]
