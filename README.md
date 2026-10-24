@@ -11,7 +11,7 @@ Automated audio-to-score-to-audio pipeline. This project orchestrates upstream t
 
 1. Validate the input audio, FluidSynth executable, and SoundFont.
 2. Run `song2score score` and retain its stems, MIDI, MusicXML, and report.
-3. Render each discovered MIDI file to an individual WAV.
+3. Render each discovered MIDI file to an individual WAV. MusicXML/MXL can also be supplied directly with `--musicxml`; MuseScore converts it to MIDI before rendering.
 4. Optionally mix rendered WAVs into one `final_mix.wav` using FFmpeg.
 5. Save logs and a machine-readable `pipeline-report.json`.
 
@@ -20,7 +20,8 @@ Failures stop the pipeline and are recorded in the report. Intermediate outputs 
 ## Requirements
 
 - Python 3.10+ (Python 3.11 recommended).
-- `song2score` installed in the active environment.
+- `song2score` installed in the active environment (audio-input mode).
+- MuseScore 4 CLI available on `PATH` (only for `--musicxml` mode).
 - FluidSynth CLI available on `PATH`.
 - A General MIDI-compatible SoundFont (`.sf2` or `.sf3`).
 - FFmpeg on `PATH` for the optional final mix.
@@ -55,6 +56,22 @@ Or run from a source checkout:
 ```powershell
 python -m wav2score_render "D:\audio\song.wav" --soundfont "D:\soundfonts\GeneralUser-GS.sf2" --out "D:\renders\song" --stems 6
 ```
+
+### Render MusicXML as accompaniment audio
+
+Pass a MusicXML (`.musicxml`/`.xml`) or compressed MusicXML (`.mxl`) file with `--musicxml`. MuseScore CLI converts the score to MIDI, then FluidSynth renders it with your SoundFont. This renders the notes/instruments already present in the score; it does not automatically compose missing accompaniment parts.
+
+```powershell
+wav2score-render "D:\scores\song.musicxml" --musicxml --soundfont "D:\soundfonts\GeneralUser-GS.sf2" --out "D:\renders\song"
+```
+
+If MuseScore is not on `PATH`, pass its executable explicitly:
+
+```powershell
+wav2score-render "D:\scores\song.musicxml" --musicxml --musescore "C:\Program Files\MuseScore 4\bin\MuseScore4.exe" --soundfont "D:\soundfonts\GeneralUser-GS.sf2"
+```
+
+The output includes `transcription/midi/song.mid`, `rendered_tracks/song.wav`, and (unless `--no-mix` is used) `final_mix.wav`.
 
 To skip final mixing (individual rendered tracks are still produced):
 

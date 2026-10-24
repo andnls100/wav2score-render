@@ -38,6 +38,8 @@ class PipelineConfig:
     song2score_executable: str = "song2score"
     fluidsynth_executable: str = "fluidsynth"
     ffmpeg_executable: str = "ffmpeg"
+    musicxml: bool = False
+    musescore_executable: str = "MuseScore4"
 
 
 def _timestamp() -> str:
@@ -99,7 +101,10 @@ def run_pipeline(config: PipelineConfig, *, runner: Callable = subprocess.run) -
     input_path = Path(config.input_path).expanduser().resolve()
     soundfont_path = Path(config.soundfont_path).expanduser().resolve()
     if not input_path.is_file():
-        raise PipelineError(f"Input audio file does not exist: {input_path}")
+        expected = "MusicXML/MXL file" if config.musicxml else "audio file"
+        raise PipelineError(f"Input {expected} does not exist: {input_path}")
+    if config.musicxml and input_path.suffix.lower() not in {".musicxml", ".xml", ".mxl"}:
+        raise PipelineError("With --musicxml, input must be a .musicxml, .xml, or .mxl file.")
     if not soundfont_path.is_file():
         raise PipelineError(f"SoundFont file does not exist: {soundfont_path}")
     if config.stems not in (4, 6):
@@ -128,6 +133,7 @@ def run_pipeline(config: PipelineConfig, *, runner: Callable = subprocess.run) -
         "soundfont": str(soundfont_path),
         "output_dir": str(output_dir),
         "settings": {
+            "input_mode": "musicxml" if config.musicxml else "audio",
             "stems": config.stems,
             "parts": config.parts,
             "sample_rate": config.sample_rate,
@@ -146,24 +152,34 @@ def run_pipeline(config: PipelineConfig, *, runner: Callable = subprocess.run) -
         report_path.write_text(json.dumps(report, ensure_ascii=False, indent=2), encoding="utf-8")
 
     try:
-        song2score = _find_executable(config.song2score_executable)
         fluidsynth = _find_executable(config.fluidsynth_executable)
         ffmpeg = _find_executable(config.ffmpeg_executable) if config.mix else None
-
-        title = config.title or input_path.stem
-        command = [
-            song2score, "score", str(input_path), "--out", str(transcription_dir),
-            "--title", title, "--stems", str(config.stems),
-        ]
-        if config.parts:
-            command.extend(["--parts", config.parts])
-        report["commands"].append(command)
-        _run(command, logs_dir / "song2score.log", runner=runner)
-
         midi_dir = transcription_dir / "midi"
-        midi_files = sorted(p for p in midi_dir.rglob("*") if p.is_file() and p.suffix.lower() in {".mid", ".midi"}) if midi_dir.exists() else []
-        if not midi_files:
-            raise PipelineError(f"song2score completed but no MIDI files were found under {midi_dir}. Check its log and output structure.")
+        midi_dir.mkdir(parents=True, exist_ok=True)
+
+        if config.musicxml:
+            musescore = _find_executable(config.musescore_executable)
+            midi_path = midi_dir / f"{_safe_stem(input_path)}.mid"
+            command = [musescore, "-o", str(midi_path), str(input_path)]
+            report["commands"].append(command)
+            _run(command, logs_dir / "musescore-musicxml-to-midi.log", runner=runner)
+            if not midi_path.is_file():
+                raise PipelineError(f"MuseScore completed but did not create expected MIDI file: {midi_path}")
+            midi_files = [midi_path]
+        else:
+            song2score = _find_executable(config.song2score_executable)
+            title = config.title or input_path.stem
+            command = [
+                song2score, "score", str(input_path), "--out", str(transcription_dir),
+                "--title", title, "--stems", str(config.stems),
+            ]
+            if config.parts:
+                command.extend(["--parts", config.parts])
+            report["commands"].append(command)
+            _run(command, logs_dir / "song2score.log", runner=runner)
+            midi_files = sorted(p for p in midi_dir.rglob("*") if p.is_file() and p.suffix.lower() in {".mid", ".midi"}) if midi_dir.exists() else []
+            if not midi_files:
+                raise PipelineError(f"song2score completed but no MIDI files were found under {midi_dir}. Check its log and output structure.")
         report["midi_files"] = [str(p) for p in midi_files]
 
         used_names: set[str] = set()

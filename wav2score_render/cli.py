@@ -17,6 +17,8 @@ def build_parser() -> argparse.ArgumentParser:
     )
     parser.add_argument("input", type=Path, help="Input audio file supported by song2score")
     parser.add_argument("--soundfont", required=True, type=Path, help="Path to a .sf2/.sf3 SoundFont")
+    parser.add_argument("--musicxml", action="store_true", help="Treat input as MusicXML/MXL and render it as accompaniment audio")
+    parser.add_argument("--musescore", default="MuseScore4", help="MuseScore CLI executable used with --musicxml (default: MuseScore4)")
     parser.add_argument("--out", type=Path, default=None, help="Output directory (default: outputs/<input-stem>-<timestamp>)")
     parser.add_argument("--title", default=None, help="Score title (defaults to input filename)")
     parser.add_argument("--stems", type=int, choices=(4, 6), default=4, help="song2score stem count (default: 4)")
@@ -39,6 +41,8 @@ def main(argv: list[str] | None = None) -> int:
     config = PipelineConfig(
         input_path=args.input,
         soundfont_path=args.soundfont,
+        musicxml=args.musicxml,
+        musescore_executable=args.musescore,
         output_dir=args.out,
         title=args.title,
         stems=args.stems,

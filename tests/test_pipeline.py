@@ -69,6 +69,43 @@ class PipelineTests(unittest.TestCase):
             self.assertTrue((out / "final_mix.wav").is_file())
             self.assertTrue((out / "pipeline-report.json").is_file())
 
+    def test_musicxml_input_converts_to_midi_and_renders(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            score = root / "song.musicxml"
+            score.write_text("<score-partwise/>", encoding="utf-8")
+            sf = root / "test.sf2"
+            sf.write_bytes(b"fake soundfont")
+            out = root / "out"
+
+            def fake_which(name):
+                return f"/mock/bin/{name}"
+
+            def fake_runner(command, stdout=None, stderr=None, text=None, check=None):
+                if command[0] == "/mock/bin/MuseScore4":
+                    target = Path(command[command.index("-o") + 1])
+                    target.write_bytes(b"midi")
+                    return type("Result", (), {"returncode": 0, "stdout": "converted"})()
+                if command[0] == "/mock/bin/fluidsynth":
+                    target = Path(command[command.index("-F") + 1])
+                    target.write_bytes(b"wav")
+                    return type("Result", (), {"returncode": 0, "stdout": "rendered"})()
+                if command[0] == "/mock/bin/ffmpeg":
+                    Path(command[-1]).write_bytes(b"mixed wav")
+                    return type("Result", (), {"returncode": 0, "stdout": "mixed"})()
+                raise AssertionError(f"Unexpected command: {command}")
+
+            with patch("wav2score_render.pipeline.shutil.which", side_effect=fake_which):
+                report = run_pipeline(
+                    PipelineConfig(score, sf, output_dir=out, musicxml=True),
+                    runner=fake_runner,
+                )
+            self.assertEqual(report["status"], "success")
+            self.assertEqual(report["settings"]["input_mode"], "musicxml")
+            self.assertTrue((out / "transcription" / "midi" / "song.mid").is_file())
+            self.assertTrue((out / "rendered_tracks" / "song.wav").is_file())
+            self.assertTrue((out / "final_mix.wav").is_file())
+
     def test_failure_persists_report(self):
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)
